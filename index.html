@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>大学生活管理助手</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 登录 / 注册 覆盖层 -->
+  <div class="auth-screen" id="auth-screen" hidden>
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="brand-logo" style="width:54px;height:54px;font-size:26px;margin:0 auto 12px">余</div>
+        <strong>生活管理助手</strong>
+        <span>登录后开始使用</span>
+      </div>
+      <div id="auth-box"></div>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">余</div>
+      <div class="brand-text">
+        <strong>生活管理助手</strong>
+        <span>大学生活 · 一站式</span>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-view="dashboard"><span class="nav-icon">⌂</span>首页</button>
+      <button class="nav-item" data-view="kebiao"><span class="nav-icon">▦</span>课表</button>
+      <button class="nav-item" data-view="plan"><span class="nav-icon">◷</span>日程规划</button>
+      <button class="nav-item" data-view="fitness"><span class="nav-icon">⚡</span>健身饮食</button>
+      <button class="nav-item" data-view="finance"><span class="nav-icon">¥</span>财务收支</button>
+      <button class="nav-item" data-view="todo"><span class="nav-icon">✓</span>待办事项</button>
+      <button class="nav-item" data-view="media"><span class="nav-icon">▣</span>Vlog 素材</button>
+      <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span>设置</button>
+    </nav>
+    <div class="sidebar-foot">
+      <span id="current-user-label" style="display:block;margin-bottom:8px"></span>
+      <button class="btn ghost small" id="btn-logout" style="width:100%">退出登录</button>
+      <span style="display:block;margin-top:8px;color:#64748b">数据保存在本机浏览器</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- 首页 -->
+    <section class="view active" id="view-dashboard">
+      <header class="view-head">
+        <h1>首页</h1>
+        <p id="today-line"></p>
+      </header>
+      <div class="dash-grid">
+        <div class="card dash-today">
+          <h3>今日课程</h3>
+          <div id="dash-courses"></div>
+        </div>
+        <div class="card dash-todo">
+          <h3>今日待办</h3>
+          <div id="dash-todos"></div>
+        </div>
+        <div class="card dash-finance">
+          <h3>本月财务</h3>
+          <div id="dash-finance"></div>
+        </div>
+        <div class="card dash-fitness">
+          <h3>本周健身</h3>
+          <div id="dash-fitness"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 课表 -->
+    <section class="view" id="view-kebiao">
+      <header class="view-head">
+        <h1>课表</h1>
+        <div class="head-actions">
+          <button class="btn ghost" id="btn-fill-default">填入默认课表</button>
+          <button class="btn primary" id="btn-add-course">+ 添加课程</button>
+        </div>
+      </header>
+      <div class="card">
+        <div class="kebiao-wrap" id="kebiao-grid"></div>
+      </div>
+      <p class="hint">点击课程格子可编辑或删除；默认节次时间可在「设置」中调整。</p>
+    </section>
+
+    <!-- 日程规划 -->
+    <section class="view" id="view-plan">
+      <header class="view-head">
+        <h1>日程规划</h1>
+        <div class="head-actions">
+          <input type="date" id="plan-date" class="input inline">
+          <button class="btn primary" id="btn-add-plan">+ 添加安排</button>
+        </div>
+      </header>
+      <div id="plan-alert"></div>
+      <div class="plan-layout">
+        <div class="card cal-card">
+          <div class="cal-head">
+            <button class="btn ghost small" id="cal-prev">‹</button>
+            <b id="cal-month-label"></b>
+            <button class="btn ghost small" id="cal-next">›</button>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+          <div class="cal-legend"><span class="cal-dot"></span> 有重要事项</div>
+        </div>
+        <div class="card plan-main">
+          <h3 id="plan-date-label"></h3>
+          <div id="plan-timeline"></div>
+        </div>
+      </div>
+      <div class="card imp-box">
+        <h3>重要事项（考试 / 报到 / 截止日期等）</h3>
+        <div class="imp-form">
+          <input type="text" id="imp-title" class="input" placeholder="今日是否有重要事项？如：报到、期末考试…">
+          <input type="date" id="imp-date" class="input inline">
+          <button class="btn primary" id="btn-add-imp">标记</button>
+        </div>
+        <div id="imp-list"></div>
+      </div>
+      <p class="hint">课程自动标记为占用时间（深色块），其余时间可自由规划学习、健身、社团与休息。</p>
+    </section>
+
+    <!-- 健身饮食 -->
+    <section class="view" id="view-fitness">
+      <header class="view-head">
+        <h1>健身与饮食</h1>
+        <div class="head-actions">
+          <button class="btn primary" id="btn-edit-body">编辑身体数据</button>
+        </div>
+      </header>
+      <div class="fit-grid">
+        <div class="card">
+          <h3>身体数据</h3>
+          <div id="fit-body"></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h3>每日目标</h3>
+            <a class="btn ghost small" href="https://www.cnsoc.org/drpostand/" target="_blank" rel="noopener">权威营养推荐表 ↗</a>
+          </div>
+          <div id="fit-target"></div>
+          <p class="hint">推荐依据你的身体数据，参考《中国居民膳食营养素参考摄入量（DRIs）》与《中国居民膳食指南 2022》。</p>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h3>锻炼计划</h3>
+            <button class="btn ghost small" id="btn-clear-plan">清空计划</button>
+          </div>
+          <div id="fit-plan"></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h3>今日饮食</h3>
+            <a class="btn ghost small" href="http://dg.cnsoc.org/article/04/wDCyy7cWSJCN6pwKHOo5Dw.html" target="_blank" rel="noopener">不同人群饮水推荐 ↗</a>
+          </div>
+          <div id="fit-diet"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3>体重变化曲线</h3>
+          <div style="display:flex;gap:8px">
+            <button class="btn ghost small" id="btn-manage-weights">管理记录</button>
+            <button class="btn ghost small" id="btn-add-weight">+ 记录体重</button>
+          </div>
+        </div>
+        <div class="chart-tabs" id="chart-tabs">
+          <button class="filter-chip active" data-range="3d">每三天</button>
+          <button class="filter-chip" data-range="week">每周</button>
+          <button class="filter-chip" data-range="month">每月</button>
+        </div>
+        <div id="fit-chart"></div>
+        <p class="hint">体重按每三天/每周/每月自动统计并绘制曲线；喝水每杯按 500ml 计算。</p>
+      </div>
+    </section>
+
+    <!-- 财务收支 -->
+    <section class="view" id="view-finance">
+      <header class="view-head">
+        <h1>财务收支</h1>
+        <div class="head-actions">
+          <input type="month" id="finance-month" class="input inline">
+          <button class="btn primary" id="btn-add-money">+ 记一笔</button>
+        </div>
+      </header>
+      <div class="fin-summary" id="fin-summary"></div>
+      <div class="fin-grid">
+        <div class="card">
+          <h3>收支明细</h3>
+          <div id="fin-list"></div>
+        </div>
+        <div class="card">
+          <h3>支出分类统计</h3>
+          <div id="fin-cats"></div>
+          <button class="btn ghost small" id="btn-set-budget">设置月预算</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 待办事项 -->
+    <section class="view" id="view-todo">
+      <header class="view-head">
+        <h1>待办事项</h1>
+        <div class="head-actions">
+          <button class="btn primary" id="btn-add-todo">+ 添加待办</button>
+        </div>
+      </header>
+      <div class="todo-filters" id="todo-filters"></div>
+      <div class="card">
+        <div id="todo-list"></div>
+      </div>
+    </section>
+
+    <!-- Vlog 素材 -->
+    <section class="view" id="view-media">
+      <header class="view-head">
+        <h1>Vlog 素材库</h1>
+        <div class="head-actions">
+          <button class="btn primary" id="btn-upload-media">+ 上传素材</button>
+        </div>
+      </header>
+      <div class="media-toolbar">
+        <input type="text" id="media-search" class="input" placeholder="搜索标签或描述…">
+      </div>
+      <div class="media-grid" id="media-grid"></div>
+      <p class="hint">图片和视频直接存入本机浏览器（IndexedDB），不上传任何服务器；建议定期导出备份。</p>
+    </section>
+
+    <!-- 设置 -->
+    <section class="view" id="view-settings">
+      <header class="view-head"><h1>设置</h1></header>
+      <div class="card">
+        <h3>节次时间设置</h3>
+        <div id="period-settings"></div>
+        <button class="btn primary" id="btn-save-periods">保存节次时间</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- 模态框容器 -->
+  <div class="modal-mask" id="modal-mask" hidden>
+    <div class="modal" id="modal-box"></div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/kebiao.js"></script>
+  <script src="js/plan.js"></script>
+  <script src="js/fitness.js"></script>
+  <script src="js/finance.js"></script>
+  <script src="js/todo.js"></script>
+  <script src="js/media.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
