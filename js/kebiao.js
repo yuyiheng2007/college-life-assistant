@@ -53,6 +53,14 @@ const Kebiao = (function () {
 
   /* ---------- 渲染 ---------- */
   function render() {
+    if (window.innerWidth <= 820) {
+      renderMobileList();
+    } else {
+      renderTable();
+    }
+  }
+
+  function renderTable() {
     const data = Store.load();
     const grid = document.getElementById("kebiao-grid");
     const days = [1, 2, 3, 4, 5, 6, 7];
@@ -91,6 +99,41 @@ const Kebiao = (function () {
       html += `</tr>`;
     }
     html += `</tbody></table>`;
+    grid.innerHTML = html;
+    grid.querySelectorAll("[data-edit]").forEach(el => {
+      el.addEventListener("click", () => editCourse(el.dataset.edit));
+    });
+  }
+
+  /* ---------- 手机端：按天列表视图 ---------- */
+  function renderMobileList() {
+    const data = Store.load();
+    const grid = document.getElementById("kebiao-grid");
+    const days = [1, 2, 3, 4, 5, 6, 7];
+    const dayCn = ["", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+    let html = `<div class="kebiao-mobile">`;
+    days.forEach(day => {
+      const courses = data.courses
+        .filter(c => c.day === day)
+        .sort((a, b) => a.start - b.start);
+      html += `<div class="km-day">
+        <div class="km-day-head"><b>${dayCn[day]}</b><span>${courses.length ? courses.length + " 节课" : "无课"}</span></div>`;
+      if (!courses.length) {
+        html += `<div class="km-empty">无课，自由安排</div>`;
+      } else {
+        courses.forEach(c => {
+          html += `<div class="km-course" style="border-left:4px solid ${c.color}" data-edit="${c.id}">
+            <div class="km-time">${slotTime(c.start)}-${slotEnd(c.end)}<span class="km-slot">第${c.start}-${c.end}节</span></div>
+            <div class="km-info">
+              <div class="km-name">${UI.esc(c.name)}</div>
+              <div class="km-sub">${UI.esc([c.weeks, c.place, c.teacher].filter(Boolean).join(" · ") || "点击补充地点/老师")}</div>
+            </div>
+          </div>`;
+        });
+      }
+      html += `</div>`;
+    });
+    html += `</div>`;
     grid.innerHTML = html;
     grid.querySelectorAll("[data-edit]").forEach(el => {
       el.addEventListener("click", () => editCourse(el.dataset.edit));
@@ -200,6 +243,181 @@ const Kebiao = (function () {
     UI.toast("已填入一班默认课表");
   }
 
+  /* ---------- PDF 课表导入 ---------- */
+  function importPdf() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/pdf";
+    input.onchange = () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      UI.toast("正在解析 PDF…");
+      parsePdf(file).then(candidates => {
+        if (!candidates.length) {
+          UI.toast("没识别出课程。请确认 PDF 是文字版（非扫描图片），且包含星期和节次信息");
+          return;
+        }
+        showPdfPreview(candidates);
+      }).catch(e => {
+        UI.toast("PDF 解析失败：" + (e && e.message ? e.message : "文件格式不支持"));
+      });
+    };
+    input.click();
+  }
+
+  async function parsePdf(file) {
+    const pdfjs = window.pdfjsLib;
+    pdfjs.GlobalWorkerOptions.workerSrc = "js/pdf.worker.min.js";
+    const buf = await file.arrayBuffer();
+    const doc = await pdfjs.getDocument({ data: buf }).promise;
+    let text = "";
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      text += extractLines(content) + "\n";
+    }
+    return matchCourses(text);
+  }
+
+  function extractLines(content) {
+    const items = content.items.map(it => ({
+      str: it.str,
+      x: it.transform[4],
+      y: it.transform[5],
+    }));
+    items.sort((a, b) => b.y - a.y);
+    const lines = [];
+    let cur = null, curY = null;
+    items.forEach(it => {
+      if (curY === null || Math.abs(it.y - curY) > 5) {
+        cur = [];
+        curY = it.y;
+        lines.push(cur);
+      }
+      cur.push(it);
+    });
+    return lines
+      .map(line => line.sort((a, b) => a.x - b.x).map(i => i.str).join(" "))
+      .join("\n");
+  }
+
+  function matchCourses(text) {
+    const dayMap = {
+      "星期一": 1, "周一": 1, "星期二": 2, "周二": 2, "星期三": 3, "周三": 3,
+      "星期四": 4, "周四": 4, "星期五": 5, "周五": 5, "星期六": 6, "周六": 6,
+      "星期日": 7, "周日": 7, "星期天": 7,
+    };
+    const courses = [];
+    const seen = new Set();
+    text.split("\n").forEach(line => {
+      const dayKey = Object.keys(dayMap).find(d => line.includes(d));
+      if (!dayKey) return;
+      const day = dayMap[dayKey];
+      // 节次匹配：优先"第X-Y节"明确格式；其次星期之后的位置；最后全行（均排除"X-Y周"周次）
+      const slotMatch =
+        line.match(/(?:第)?(\d{1,2})\s*[-~至到]\s*(\d{1,2})\s*节(?!\s*周)/)
+        || (line.slice(line.indexOf(dayKey) + dayKey.length).match(/(?:第)?(\d{1,2})\s*[-~至到]\s*(\d{1,2})(?!\s*周)/))
+        || line.match(/(?:第)?(\d{1,2})\s*[-~至到]\s*(\d{1,2})(?!\s*周)/);
+      if (!slotMatch) return;
+      const start = Number(slotMatch[1]);
+      const end = Number(slotMatch[2]);
+      if (start < 1 || end > 13 || end < start) return;
+      let rest = line.replace(dayKey, "").replace(slotMatch[0], "").trim();
+      const meta = splitMeta(rest);
+      if (!meta.name) return;
+      const key = `${day}|${start}|${end}|${meta.name}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      courses.push({ name: meta.name, day, start, end, weeks: meta.weeks, place: meta.place, teacher: meta.teacher });
+    });
+    return courses;
+  }
+
+  function splitMeta(s) {
+    let rest = s;
+    let weeks = "", place = "", teacher = "";
+    const wm = rest.match(/(\d{1,2}\s*[-~]\s*\d{1,2})\s*周/);
+    if (wm) { weeks = wm[1].replace(/\s/g, "") + "周"; rest = rest.replace(wm[0], ""); }
+    const wm2 = rest.match(/第(\d{1,2})\s*周/);
+    if (wm2) { weeks = weeks || ("第" + wm2[1] + "周"); rest = rest.replace(wm2[0], ""); }
+    const pm = rest.match(/[Ee]\d{3}[A-Za-z]?|[A-Za-z]{1,2}(?:区)?\d{2,4}|[\u4e00-\u9fa5]{1,4}楼[\u4e00-\u9fa5A-Za-z]*\d{0,4}/);
+    if (pm) { place = pm[0]; rest = rest.replace(pm[0], ""); }
+    const parts = rest.split(/[\s·,，。]+/).filter(Boolean);
+    if (parts.length > 1) {
+      const last = parts[parts.length - 1];
+      if (/^[\u4e00-\u9fa5]{2,4}$/.test(last)) {
+        teacher = last;
+        parts.pop();
+      }
+    }
+    let name = parts.join("");
+    if (!name) name = rest.replace(/[\s·,，。]/g, "");
+    return { name, weeks, place, teacher };
+  }
+
+  function showPdfPreview(candidates) {
+    const DAYS = [[1, "周一"], [2, "周二"], [3, "周三"], [4, "周四"], [5, "周五"], [6, "周六"], [7, "周日"]];
+    const html = `<h2>PDF 课表解析结果（${candidates.length} 门课）</h2>
+      <p class="hint" style="margin-top:-8px">请核对每行信息，可修改或删除；确认后导入。</p>
+      <div style="margin-bottom:10px">
+        <label style="font-size:12.5px;color:#64748b;margin-right:10px">
+          <input type="radio" name="importMode" value="replace" checked> 替换当前课表
+        </label>
+        <label style="font-size:12.5px;color:#64748b">
+          <input type="radio" name="importMode" value="append"> 追加到当前课表
+        </label>
+      </div>
+      <div class="pdf-preview" id="pdf-preview">
+        ${candidates.map((c, i) => `
+        <div class="pdf-row" data-idx="${i}">
+          <input class="input pdf-name" data-idx="${i}" value="${UI.esc(c.name)}">
+          <select class="input pdf-day" data-idx="${i}">${DAYS.map(d => `<option value="${d[0]}" ${d[0] === c.day ? "selected" : ""}>${d[1]}</option>`).join("")}</select>
+          <input class="input pdf-start" data-idx="${i}" type="number" min="1" max="13" value="${c.start}" title="开始节">
+          <input class="input pdf-end" data-idx="${i}" type="number" min="1" max="13" value="${c.end}" title="结束节">
+          <input class="input pdf-weeks" data-idx="${i}" value="${UI.esc(c.weeks)}" placeholder="周次">
+          <input class="input pdf-place" data-idx="${i}" value="${UI.esc(c.place)}" placeholder="地点">
+          <input class="input pdf-teacher" data-idx="${i}" value="${UI.esc(c.teacher)}" placeholder="老师">
+          <button type="button" class="btn danger small" data-del="${i}">删</button>
+        </div>`).join("")}
+      </div>
+      ${UI.modalActions("确认导入")}`;
+    UI.openModal(html, box => {
+      box.querySelectorAll("[data-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          btn.closest(".pdf-row").remove();
+        });
+      });
+      box.querySelector("[data-act=ok]").addEventListener("click", () => {
+        const mode = box.querySelector('input[name="importMode"]:checked').value;
+        const rows = box.querySelectorAll(".pdf-row");
+        const list = [];
+        rows.forEach(row => {
+          const i = row.dataset.idx;
+          const name = box.querySelector(`.pdf-name[data-idx="${i}"]`).value.trim();
+          const start = Number(box.querySelector(`.pdf-start[data-idx="${i}"]`).value);
+          const end = Number(box.querySelector(`.pdf-end[data-idx="${i}"]`).value);
+          if (!name || !start || !end) return;
+          list.push({
+            id: Store.uid(), name,
+            day: Number(box.querySelector(`.pdf-day[data-idx="${i}"]`).value),
+            start, end,
+            weeks: box.querySelector(`.pdf-weeks[data-idx="${i}"]`).value.trim(),
+            place: box.querySelector(`.pdf-place[data-idx="${i}"]`).value.trim(),
+            teacher: box.querySelector(`.pdf-teacher[data-idx="${i}"]`).value.trim(),
+            color: UI.courseColor(name),
+          });
+        });
+        if (!list.length) { UI.toast("没有有效课程"); return; }
+        const data = Store.load();
+        data.courses = mode === "replace" ? list : data.courses.concat(list);
+        Store.save(data);
+        UI.closeModal();
+        render();
+        UI.toast(`已导入 ${list.length} 门课`);
+      });
+    });
+  }
+
   /* ---------- 供其他模块调用 ---------- */
   function coursesOfDay(day) {
     const data = Store.load();
@@ -207,6 +425,17 @@ const Kebiao = (function () {
       .filter(c => c.day === day)
       .sort((a, b) => a.start - b.start);
   }
+
+  /* ---------- 事件绑定 ---------- */
+  document.getElementById("btn-import-pdf").addEventListener("click", importPdf);
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const active = document.querySelector(".view.active");
+      if (active && active.id === "view-kebiao") render();
+    }, 200);
+  });
 
   return { render, openForm, fillDefault, coursesOfDay, defaultCourses };
 })();

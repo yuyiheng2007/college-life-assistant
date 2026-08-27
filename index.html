@@ -77,13 +77,14 @@
         <h1>课表</h1>
         <div class="head-actions">
           <button class="btn ghost" id="btn-fill-default">填入默认课表</button>
+          <button class="btn ghost" id="btn-import-pdf">导入 PDF 课表</button>
           <button class="btn primary" id="btn-add-course">+ 添加课程</button>
         </div>
       </header>
       <div class="card">
         <div class="kebiao-wrap" id="kebiao-grid"></div>
       </div>
-      <p class="hint">点击课程格子可编辑或删除；默认节次时间可在「设置」中调整。</p>
+      <p class="hint">手机端自动切换为按天列表；点击课程可编辑或删除；导入 PDF 支持文字版课表文件。</p>
     </section>
 
     <!-- 日程规划 -->
@@ -250,6 +251,7 @@
   <script src="js/store.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/pdf.min.js"></script>
   <script src="js/kebiao.js"></script>
   <script src="js/plan.js"></script>
   <script src="js/fitness.js"></script>
